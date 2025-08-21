@@ -50,6 +50,11 @@ class User extends Authenticatable
 
     public function checkPassword($password)
     {
-        return Hash::check($password, $this->password); 
-    }   
+        return Hash::check($password, $this->password);
+
+    }
+    public function connections()
+    {
+        return $this->hasMany('App\Models\Connection');
+    }
 }
