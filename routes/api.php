@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\networks\LinkedInController;
+use App\Http\Controllers\networks\RedditController;
 
 Route::get('/user', function () {
     return "Entra";
@@ -30,3 +31,8 @@ Route::get('/histories/user/{userId}/queue', [HistoryController::class, 'getQueu
 Route::get('/connections/linkedin/authorize', [LinkedInController::class,'getLinkedInAuthorize']);
 Route::post('/connections/linkedin/access-token', [LinkedInController::class,'getAccessToken']);
 Route::post('/connections/linkedin/create-post', [LinkedInController::class,'createPost']);
+
+// Rutas para Reddit
+Route::get('/connections/reddit/authorize', [RedditController::class,'getRedditAuthorize']);
+Route::post('/connections/reddit/access-token', [RedditController::class,'getAccessToken']);
+Route::post('/connections/reddit/create-post', [RedditController::class,'createPost']);
