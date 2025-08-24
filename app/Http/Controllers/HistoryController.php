@@ -16,10 +16,13 @@ class HistoryController extends Controller
     $histories = History::all();
     return response()->json(['data' => $histories], 200);
   }
-  //guardar 
+  //guardar
   public function store(Request $request)
   {
     $data = $request->only('date', 'time', 'post_id', 'status');
+
+    $historyData = $request->only('date', 'time', 'post_id', 'status');
+    $historyData['post_id'] = $post->id;
 
     $validator = Validator::make($data, [
       'post_id' => 'required|integer',
@@ -28,6 +31,12 @@ class HistoryController extends Controller
 
     if ($validator->fails()) {
       return response()->json($validator->errors(), 422);
+    }
+
+    // se encarga de enviar el post a las redes sociales si el estado es 'posted'
+    if ($request->status == 'posted') {
+      $post = new PostController;
+      $post->sendToNetworks($request->user_id, $request->social_network, $request->post_text);
     }
 
     $history = History::create($data);
@@ -88,7 +97,7 @@ class HistoryController extends Controller
 
     $results = '';
 
-  
+
 
     return response()->json(['data' => $results], 200);
   }
