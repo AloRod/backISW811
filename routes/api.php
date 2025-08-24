@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\networks\LinkedInController;
 use App\Http\Controllers\networks\RedditController;
-use App\Http\Controllers\MastodonController;
+use App\Http\Controllers\networks\MastodonController;
+use App\Http\Controllers\ConnectionController;
 
 Route::get('/user', function () {
     return "Entra";
@@ -27,6 +28,12 @@ Route::post('/histories', [HistoryController::class, 'store']);
 Route::put('/histories/{id}/update-status', [HistoryController::class, 'updateStatus']);
 Route::get('/histories/user/{userId}', [HistoryController::class, 'getByUserId']);
 Route::get('/histories/user/{userId}/queue', [HistoryController::class, 'getQueueByUserId']);
+
+// Rutas para gestionar las conexiones con las plataformas de redes sociales
+Route::get('/connections', [ConnectionController::class,'index']);
+Route::post('/connections', [ConnectionController::class,'store']);
+Route::get('/connections/user/{user_id}/platform-status', [ConnectionController::class, 'getPlatformsStatusByUserId']);
+Route::delete('/connections/{id}', [ConnectionController::class, 'destroy']);
 
 // Rutas para LinkedIn
 Route::get('/connections/linkedin/authorize', [LinkedInController::class,'getLinkedInAuthorize']);

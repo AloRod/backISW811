@@ -7,6 +7,7 @@ use App\Models\History;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Post;
 
 class HistoryController extends Controller
 {
@@ -19,12 +20,12 @@ class HistoryController extends Controller
   //guardar
   public function store(Request $request)
   {
-    $data = $request->only('date', 'time', 'post_id', 'status');
+    $post = Post::create($request->all());
 
     $historyData = $request->only('date', 'time', 'post_id', 'status');
     $historyData['post_id'] = $post->id;
 
-    $validator = Validator::make($data, [
+    $validator = Validator::make($historyData, [
       'post_id' => 'required|integer',
       'status' => 'required|in:posted,scheduled,queue'
     ]);
@@ -39,9 +40,9 @@ class HistoryController extends Controller
       $post->sendToNetworks($request->user_id, $request->social_network, $request->post_text);
     }
 
-    $history = History::create($data);
+    $history = History::create($historyData);
 
-    return response()->json(['data' => $history], 201);
+    return response()->json(['data' => ['post' => $post, 'history' => $history]], 201);
   }
 
   public function updateStatus(Request $request, $id)
