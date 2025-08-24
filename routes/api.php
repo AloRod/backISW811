@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\networks\LinkedInController;
 use App\Http\Controllers\networks\RedditController;
+use App\Http\Controllers\MastodonController;
 
 Route::get('/user', function () {
     return "Entra";
@@ -36,3 +37,9 @@ Route::post('/connections/linkedin/create-post', [LinkedInController::class,'cre
 Route::get('/connections/reddit/authorize', [RedditController::class,'getRedditAuthorize']);
 Route::post('/connections/reddit/access-token', [RedditController::class,'getAccessToken']);
 Route::post('/connections/reddit/create-post', [RedditController::class,'createPost']);
+
+// Rutas para Mastodon
+Route::get('/connections/mastodon/authorize', [MastodonController::class,'getMastodonAuthorize']);
+Route::post('/connections/mastodon/access-token', [MastodonController::class,'getAccessToken']);
+Route::post('/connections/mastodon/create-post', [MastodonController::class,'createPost']);
+Route::get('/connections/mastodon/account-info/{user_id}', [MastodonController::class,'getAccountInfo']);
