@@ -22,6 +22,14 @@ class LoginController extends Controller
     if (!($user && $user->checkPassword($credentials['password']))) {
       return response()->json(['error' => 'Invalid credentials.',], 401);
     }
+    
+    if ($user->two_factor_enabled) {
+      $data = [
+        'id' => $user->id,
+        'two_factor_enabled' => $user->two_factor_enabled,
+      ];
+      return response()->json(['data' => $data], 200);
+    }
 
     return response()->json(['data' => $user], 200);
   }

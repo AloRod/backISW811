@@ -28,6 +28,12 @@ class RegisterController extends Controller
       return response()->json($validator->errors(), 422);
     }
 
+    $google_2fa = new Google2FAController();
+    $data_2fa = $google_2fa->qrGenerator($request->input('email'));
+
+    $data['two_factor_enabled'] = false;
+    $data['two_factor_url'] = $data_2fa['url'];
+    $data['two_factor_code'] = $data_2fa['secret'];
 
     $user = User::create($data);
 

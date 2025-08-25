@@ -19,6 +19,9 @@ class Connection extends Model
     'user_id',
   ];
 
+  protected $casts = [
+    'status' => 'boolean',
+  ];
   public function user()
   {
     return $this->belongsTo('App\Models\User');

@@ -23,6 +23,9 @@ class User extends Authenticatable
         'last_name',
         'email',
         'password',
+        'two_factor_enabled',
+        'two_factor_code',
+        'two_factor_url',
     ];
 
     /**
@@ -44,8 +47,13 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'two_factor_enabled' => 'boolean',
         ];
+        
+    }
+    public function setPasswordAttribute($password)
+    {
+        $this->attributes['password'] = bcrypt($password);
     }
 
     public function checkPassword($password)
@@ -56,5 +64,9 @@ class User extends Authenticatable
     public function connections()
     {
         return $this->hasMany('App\Models\Connection');
+    }
+    public function posts()
+    {
+        return $this->hasMany('App\Models\Post');
     }
 }

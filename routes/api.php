@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Google2FAController;
 use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
@@ -50,3 +51,8 @@ Route::get('/connections/mastodon/authorize', [MastodonController::class,'getMas
 Route::post('/connections/mastodon/access-token', [MastodonController::class,'getAccessToken']);
 Route::post('/connections/mastodon/create-post', [MastodonController::class,'createPost']);
 Route::get('/connections/mastodon/account-info/{user_id}', [MastodonController::class,'getAccountInfo']);
+
+// Rutas para el Auth
+Route::post('/2fa/verify', [Google2FAController::class,'verify']);
+Route::put('/users/{id}/enable-2fa', [Google2FAController::class,'enable']);
+Route::get('/users/{id}/qr-2fa', [Google2FAController::class,'getQRCode']);
