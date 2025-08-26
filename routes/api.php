@@ -35,7 +35,8 @@ Route::get('/schedules/user/{user_id}', [ScheduleController::class, 'getByUserId
 Route::get('/schedules/user/{user_id}/day/{day_of_week}', [ScheduleController::class, 'getByUserIdAndDay']);
 Route::get('/schedules/user/{user_id}/weekly', [ScheduleController::class, 'getWeeklySchedule']);
 Route::get('/schedules/user/{user_id}/closest', [ScheduleController::class, 'getClosestSchedule']);
-
+Route::get('/schedules/user/{user_id}/next-available', [ScheduleController::class, 'getNextAvailableSchedule']);
+Route::get('/schedules/user/{user_id}/next-dates', [ScheduleController::class, 'getNextAvailableDates']);
 
 //rutas del historial
 Route::get('/histories', [HistoryController::class, 'index']);

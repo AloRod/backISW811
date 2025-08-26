@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Log;
 class Schedule extends Model
 {
   use HasFactory;
@@ -69,36 +69,43 @@ class Schedule extends Model
     return $this->belongsTo('App\Models\User');
   }
 
-  /**
+  
+ /**
    * Obtener el próximo post de este horario a partir de una fecha determinada.
+   * Usa la lógica mejorada del QueueScheduleService.
    */
-  public function getNextOccurrence($fromDate = null)
+  public function getNextOccurrence()
   {
-    $fromDate = $fromDate ? Carbon::parse($fromDate) : Carbon::now();
-    $currentDayOfWeek = $fromDate->dayOfWeek;
+    $fromDate = Carbon::now();
+    Log::info('Now: ' . $fromDate);
     
-    $currentDayOfWeek = $currentDayOfWeek === 0 ? 7 : $currentDayOfWeek;
+    // Mapeo de días de la semana (1=lunes, 2=martes, etc.) a números de Carbon (0=domingo, 1=lunes, etc.)
+    $carbonDayMap = [
+      1 => 1, // Lunes
+      2 => 2, // Martes
+      3 => 3, // Miércoles
+      4 => 4, // Jueves
+      5 => 5, // Viernes
+      6 => 6, // Sábado
+      7 => 0, // Domingo
+    ];
     
-    $daysUntilNext = $this->day_of_week - $currentDayOfWeek;
+    $scheduleDayNumber = $carbonDayMap[$this->day_of_week];
+    Log::info('scheduleDayNumber: ' . $scheduleDayNumber);
     
-    // Si es el mismo día, verificar si el horario ya pasó
-    if ($daysUntilNext === 0) {
-      $time = Carbon::parse($this->time);
-      $todayAtScheduleTime = $fromDate->copy()->setTime($time->hour, $time->minute, $time->second);
-      
-      // Si el horario de hoy ya pasó, ir al próximo día de la semana
-      if ($todayAtScheduleTime->lte($fromDate)) {
-        $daysUntilNext = 7;
-      }
-    } else if ($daysUntilNext < 0) {
-      // Si el día ya pasó esta semana, ir a la próxima semana
-      $daysUntilNext += 7;
+    // Crear la fecha/hora programada para esta semana
+    $scheduledDateTime = $fromDate->copy()
+      ->startOfWeek() // Ir al inicio de la semana (lunes)
+      ->addDays($scheduleDayNumber === 0 ? 6 : $scheduleDayNumber - 1) // Ajustar al día correcto
+      ->setTimeFromTimeString($this->time);
+    
+    
+    // Si el horario ya pasó esta semana, mover a la próxima semana
+    if ($scheduledDateTime->lte($fromDate)) {
+      $scheduledDateTime->addWeek();
     }
     
-    $nextDate = $fromDate->copy()->addDays($daysUntilNext);
-    $time = Carbon::parse($this->time);
-    
-    return $nextDate->setTime($time->hour, $time->minute, $time->second);
+    return $scheduledDateTime;
   }
 
   /**

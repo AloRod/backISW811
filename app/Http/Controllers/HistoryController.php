@@ -7,12 +7,20 @@ use Illuminate\Http\Request;
 use App\Models\History;
 use App\Models\Schedule;
 use Illuminate\Support\Facades\DB;
+use App\Services\QueueScheduleService; 
 use Illuminate\Support\Facades\Validator;
 use App\Models\Post;
 use Illuminate\Support\Facades\Log;
 
 class HistoryController extends Controller
 {
+  //metodo constructor 
+  private $queueScheduleService;
+  
+  public function __construct(QueueScheduleService $queueScheduleService)
+  {
+    $this->queueScheduleService = $queueScheduleService;
+  }
     //obtener datos
   public function index()
   {
@@ -84,6 +92,7 @@ class HistoryController extends Controller
     return response()->json(['data' => $histories], 200);
   }
 
+
   //Pendiente
 public function getQueueByUserId($user_id)
   {
@@ -103,79 +112,49 @@ public function getQueueByUserId($user_id)
       ->get();
 
     // Get user's schedules
-    $schedules = Schedule::where('user_id', $user_id)
-      ->orderBy('day_of_week')
-      ->orderBy('time')
-      ->get();
+    if ($queuePosts->isEmpty()) {
+      return response()->json(['data' => [], 'message' => 'No queue posts found for this user'], 200);
+    }
+    $results = [];
+    $currentDateTime = Carbon::now();
 
-    if ($schedules->isEmpty()) {
+    // Obtener todos los horarios ordenados por proximidad
+    $orderedSlots = $this->queueScheduleService->getOrderedAvailableSlots($user_id, $currentDateTime, false);
+
+    if (empty($orderedSlots)) {
       return response()->json(['data' => [], 'message' => 'No schedules found for this user'], 200);
     }
 
-    $results = [];
-    $currentDateTime = Carbon::now();
-    $scheduleIndex = 0;
-
-    foreach ($queuePosts as $post) {
-      // Find the next available schedule
-      $nextSchedule = $this->findNextAvailableSchedule($schedules, $currentDateTime, $scheduleIndex);
+    foreach ($queuePosts as $index => $post) {
+      // Asignar cada post al siguiente horario disponible en orden de proximidad
+      $slotIndex = $index % count($orderedSlots);
+      $selectedSlot = $orderedSlots[$slotIndex];
       
-      if ($nextSchedule) {
-        $nextOccurrence = $nextSchedule->getNextOccurrence($currentDateTime);
+      $nextSchedule = $selectedSlot['schedule'];
+      $nextOccurrence = $selectedSlot['nextOccurrence'];
+      
+      // Asegurar que la fecha calculada no sea en el pasado
+      if ($nextOccurrence->gt($currentDateTime)) {
+        $results[] = [
+          'history_id' => $post->history_id,
+          'post_text' => $post->post_text,
+          'social_network' => $post->social_network,
+          'status' => $post->status,
+          'created_at' => $post->created_at,
+          'scheduled_for' => $nextOccurrence->format('Y-m-d H:i:s'),
+          'scheduled_for_formatted' => $nextOccurrence->translatedFormat('l j F Y, g:i A'),
+          'schedule_info' => [
+            'day_name' => $nextSchedule->day_name,
+            'time' => $nextSchedule->time,
+            'time_formatted' => Carbon::parse($nextSchedule->time)->format('H:i'),
+          ]
+        ];
         
-        // Asegurar que la fecha calculada no sea en el pasado
-        if ($nextOccurrence->gt($currentDateTime)) {
-          $results[] = [
-            'history_id' => $post->history_id,
-            'post_text' => $post->post_text,
-            'social_network' => $post->social_network,
-            'status' => $post->status,
-            'created_at' => $post->created_at,
-            'scheduled_for' => $nextOccurrence->format('Y-m-d H:i:s'),
-            'scheduled_for_formatted' => $nextOccurrence->format('l, F j, Y \a\t g:i A'),
-            'schedule_info' => [
-              'day_name' => $nextSchedule->day_name,
-              'time' => $nextSchedule->time,
-              'time_formatted' => Carbon::parse($nextSchedule->time)->format('H:i'),
-            ]
-          ];
-
-          // Move to next schedule for next post
-          $scheduleIndex++;
-          if ($scheduleIndex >= $schedules->count()) {
-            $scheduleIndex = 0; // Reset to first schedule
-          }
-          
-          // Update current datetime to the next occurrence for next iteration
-          $currentDateTime = $nextOccurrence->copy()->addMinute();
-        }
+        Log::info("Post #{$index} asignado a: " . $nextSchedule->day_name . " " . $nextSchedule->time . " -> " . $nextOccurrence->format('Y-m-d H:i:s'));
       }
     }
 
     return response()->json(['data' => $results], 200);
-  }
-  
-  /**
-   * Find the next available schedule from a given datetime
-   */
-  private function findNextAvailableSchedule($schedules, $fromDateTime, $startIndex = 0)
-  {
-    $totalSchedules = $schedules->count();
-    
-    // Try schedules starting from startIndex
-    for ($i = 0; $i < $totalSchedules; $i++) {
-      $index = ($startIndex + $i) % $totalSchedules;
-      $schedule = $schedules[$index];
-      $nextOccurrence = $schedule->getNextOccurrence($fromDateTime);
-      
-      // If this schedule is in the future, it's available
-      if ($nextOccurrence->gt($fromDateTime)) {
-        return $schedule;
-      }
-    }
-    
-    // If no future schedules found, return the first one (will be next week)
-    return $schedules->first();
   }
   
   public function sendScheduledPosts()
@@ -225,67 +204,54 @@ public function getQueueByUserId($user_id)
     foreach ($queuePosts as $userId => $userPosts) {
       Log::info("Processing user $userId with " . count($userPosts) . " queue posts");
       
-      // Get user's schedules
-      $schedules = Schedule::where('user_id', $userId)
-        ->orderBy('day_of_week')
-        ->orderBy('time')
-        ->get();
+    // Obtener todos los horarios ordenados por proximidad
+      $orderedSlots = $this->queueScheduleService->getOrderedAvailableSlots($userId, $currentDateTime, true);
 
-      if ($schedules->isEmpty()) {
+      if (empty($orderedSlots)) {
         Log::warning("No schedules found for user $userId");
         continue; // Skip users without schedules
       }
 
-      $scheduleIndex = 0;
-      $currentTime = $currentDateTime->copy();
-
-      foreach ($userPosts as $post) {
-        // Find the next available schedule
-        $nextSchedule = $this->findNextAvailableSchedule($schedules, $currentTime, $scheduleIndex);
+      foreach ($userPosts as $index => $post) {
+        // Asignar cada post al siguiente horario disponible en orden de proximidad
+        $slotIndex = $index % count($orderedSlots);
+        $selectedSlot = $orderedSlots[$slotIndex];
         
-        if ($nextSchedule) {
-          $nextOccurrence = $nextSchedule->getNextOccurrence($currentTime);
+        $nextSchedule = $selectedSlot['schedule'];
+        $nextOccurrence = $selectedSlot['nextOccurrence'];
+        
+        Log::info("Post {$post->history_id} next available slot: " . $nextOccurrence->format('Y-m-d H:i:s'));
+        
+        // Solo enviar si es hora de publicar, NO cambiar estado a scheduled
+        if ($nextOccurrence->lte($currentDateTime)) {
+          Log::info("Publishing post {$post->history_id} now");
           
-          Log::info("Post {$post->history_id} scheduled for: " . $nextOccurrence->format('Y-m-d H:i:s'));
-          
-          // Check if it's time to publish this post (next occurrence is in the past or now)
-          if ($nextOccurrence->lte($currentDateTime)) {
-            Log::info("Publishing post {$post->history_id} now");
-            
-            try {
-              // Send the post
-              $postController = new PostController;
-              $postController->sendToNetworks(
-                $userId,
-                $post->social_network,
-                $post->post_text
-              );
+          try {
+            // Send the post
+            $postController = new PostController;
+            $postController->sendToNetworks(
+              $userId,
+              $post->social_network,
+              $post->post_text
+            );
 
-              // Mark the post as immediate
-              $history = History::find($post->history_id);
-              $history->status = 'immediate';
-              $history->date = $nextOccurrence->format('Y-m-d');
-              $history->time = $nextOccurrence->format('H:i:s');
-              $history->save();
+            // Mark the post as immediate only after successful sending
+            $history = History::find($post->history_id);
+            $history->status = 'immediate';
+            $history->date = $nextOccurrence->format('Y-m-d');
+            $history->time = $nextOccurrence->format('H:i:s');
+            $history->save();
 
-              Log::info("Successfully published and updated post {$post->history_id}");
-            } catch (\Exception $e) {
-              Log::error("Error publishing post {$post->history_id}: " . $e->getMessage());
-            }
-
-            // Move to next schedule for next post
-            $scheduleIndex++;
-            if ($scheduleIndex >= $schedules->count()) {
-              $scheduleIndex = 0;
-            }
-            
-            // Update current time for next iteration
-            $currentTime = $nextOccurrence->copy()->addMinute();
-          } else {
-            Log::info("Post {$post->history_id} not ready yet, scheduled for: " . $nextOccurrence->format('Y-m-d H:i:s'));
+            Log::info("Successfully published and updated post {$post->history_id}");
+          } catch (\Exception $e) {
+            Log::error("Error publishing post {$post->history_id}: " . $e->getMessage());
           }
+        } else {
+          Log::info("Post {$post->history_id} not ready yet, keeping in queue. Next slot: " . $nextOccurrence->format('Y-m-d H:i:s'));
         }
       }
+
+      
     }
     
     Log::info('sendQueuePosts completed');

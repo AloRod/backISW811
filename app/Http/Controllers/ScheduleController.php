@@ -6,9 +6,15 @@ use App\Models\Schedule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
-
+use App\Services\QueueScheduleService;
 class ScheduleController extends Controller
 {
+  private $queueScheduleService;
+  
+  public function __construct(QueueScheduleService $queueScheduleService)
+  {
+    $this->queueScheduleService = $queueScheduleService;
+  }
   public function index()
   {
     $schedules = Schedule::all();
@@ -83,7 +89,7 @@ class ScheduleController extends Controller
   }
 
   /**
-   * Get schedules by user ID
+   * Filtrar por el usuario 
    */
   public function getByUserId($user_id)
   {
@@ -128,11 +134,12 @@ class ScheduleController extends Controller
       ->where('day_of_week', $day_of_week)
       ->orderBy('time')
       ->get()
-      ->map(function ($schedule) {
+      ->map(function ($schedule) use ($day_of_week) {
         $schedule->day_name = $schedule->day_name;
         $schedule->day_abbreviation = $schedule->day_abbreviation;
         $schedule->time_formatted = Carbon::parse($schedule->time)->format('H:i');
         $schedule->time_12h = Carbon::parse($schedule->time)->format('h:i A');
+        $schedule->day_of_week = $day_of_week;
         return $schedule;
       });
 
@@ -165,9 +172,10 @@ class ScheduleController extends Controller
         'day_of_week' => $day,
         'day_name' => Schedule::getDayNames()[$day],
         'day_abbreviation' => Schedule::getDayAbbreviations()[$day],
-        'times' => $daySchedules->map(function ($schedule) {
+        'times' => $daySchedules->map(function ($schedule) use ($day) {
           return [
             'id' => $schedule->id,
+            'day_of_week' => $day,
             'time' => $schedule->time,
             'time_formatted' => Carbon::parse($schedule->time)->format('H:i'),
             'time_12h' => Carbon::parse($schedule->time)->format('h:i A'),
@@ -180,7 +188,7 @@ class ScheduleController extends Controller
   }
 
   /**
-   * Get the closest schedule for a user
+   * Obtener horarios cercanos para colas
    */
   public function getClosestSchedule($user_id)
   {
@@ -203,7 +211,7 @@ class ScheduleController extends Controller
     $response = [
       'schedule' => $closestSchedule,
       'next_occurrence' => $nextOccurrence->format('Y-m-d H:i:s'),
-      'next_occurrence_formatted' => $nextOccurrence->format('l, F j, Y \a\t g:i A'),
+      'next_occurrence_formatted' => $nextOccurrence->format('l j F Y, g:i A'),
       'days_until' => $nextOccurrence->diffInDays(Carbon::now()),
       'hours_until' => $nextOccurrence->diffInHours(Carbon::now()),
     ];
@@ -211,12 +219,68 @@ class ScheduleController extends Controller
     return response()->json(['data' => $response], 200);
   }
 
-  public function getByUserIdAndDate($user_id, $date)
+  /**
+   * Obtiene las próximas fechas disponibles para los horarios de un usuario
+   */
+  public function getNextAvailableDates($user_id, $limit = 10)
   {
-    $dayOfWeek = Carbon::parse($date)->dayOfWeek;
-    $dayOfWeek = $dayOfWeek === 0 ? 7 : $dayOfWeek;
-    
-    return $this->getByUserIdAndDay($user_id, $dayOfWeek);
+    $validator = Validator::make(['user_id' => $user_id], [
+      'user_id' => 'required|integer|exists:users,id',
+    ]);
+
+    if ($validator->fails()) {
+      return response()->json($validator->errors(), 422);
+    }
+
+    $schedules = Schedule::where('user_id', $user_id)
+      ->orderBy('day_of_week')
+      ->orderBy('time')
+      ->get();
+
+    if ($schedules->isEmpty()) {
+      return response()->json(['data' => [], 'message' => 'No schedules found for this user'], 200);
+    }
+
+    $availableDates = $this->queueScheduleService->getNextAvailableDates($schedules, $limit);
+
+    return response()->json([
+      'data' => $availableDates,
+      'message' => 'Next available dates retrieved successfully'
+    ], 200);
   }
+  
+  /**
+   * Obtiene el próximo horario disponible para un usuario
+   */
+  public function getNextAvailableSchedule($user_id)
+  {
+    $validator = Validator::make(['user_id' => $user_id], [
+      'user_id' => 'required|integer|exists:users,id',
+    ]);
+
+    if ($validator->fails()) {
+      return response()->json($validator->errors(), 422);
+    }
+
+    $nextSchedule = $this->queueScheduleService->findNextAvailableSchedule($user_id);
+    
+    if (!$nextSchedule) {
+      return response()->json(['message' => 'No schedules found for this user'], 404);
+    }
+
+    $nextOccurrence = $this->queueScheduleService->getNextAvailableDate($nextSchedule);
+    
+    $response = [
+      'schedule' => $nextSchedule,
+      'next_occurrence' => $nextOccurrence->format('Y-m-d H:i:s'),
+      'next_occurrence_formatted' => $nextOccurrence->translatedFormat('l j F Y, g:i A'),
+      'days_until' => $nextOccurrence->diffInDays(Carbon::now()),
+      'hours_until' => $nextOccurrence->diffInHours(Carbon::now()),
+      'is_available_today' => $this->queueScheduleService->isScheduleAvailableToday($nextSchedule),
+    ];
+
+    return response()->json(['data' => $response], 200);
+  }
+ 
 }
 

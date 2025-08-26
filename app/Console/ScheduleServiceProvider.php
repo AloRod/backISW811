@@ -33,7 +33,7 @@ class ScheduleServiceProvider extends ServiceProvider
     protected function schedule(Schedule $schedule): void
     {
         $schedule->call(function () {
-            $historyController = new HistoryController();
+            $historyController = app(HistoryController::class);
             $historyController->sendScheduledPosts();
             $historyController->sendQueuePosts();
         })->everyMinute();
