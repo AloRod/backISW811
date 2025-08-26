@@ -4,6 +4,7 @@ use App\Http\Controllers\Google2FAController;
 use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\RegisterController;
+use App\Http\Controllers\ScheduleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PostController;
@@ -22,6 +23,19 @@ Route::post('/register', [RegisterController::class, 'store']);
 // RUTA PARA VER Y GUARDAR LOS POSTS
 Route::get('/posts', [PostController::class, 'index']);
 Route::post('/posts', [PostController::class,'store']);
+
+//Rutas para horarios de publicacion
+Route::get('/schedules/{id}', [ScheduleController::class, 'show']);
+Route::get('/schedules', [ScheduleController::class, 'index']);
+Route::post('/schedules', [ScheduleController::class,'store']);
+Route::put('/schedules/{id}', [ScheduleController::class, 'update']);
+Route::delete('/schedules/{id}', [ScheduleController::class, 'destroy']);
+
+Route::get('/schedules/user/{user_id}', [ScheduleController::class, 'getByUserId']);
+Route::get('/schedules/user/{user_id}/day/{day_of_week}', [ScheduleController::class, 'getByUserIdAndDay']);
+Route::get('/schedules/user/{user_id}/weekly', [ScheduleController::class, 'getWeeklySchedule']);
+Route::get('/schedules/user/{user_id}/closest', [ScheduleController::class, 'getClosestSchedule']);
+
 
 //rutas del historial
 Route::get('/histories', [HistoryController::class, 'index']);
